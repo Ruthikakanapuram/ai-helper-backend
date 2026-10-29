@@ -1,20 +1,80 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsIn,
+  Matches,
+  MaxLength,
+} from 'class-validator';
+
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  PartialType,
+} from '@nestjs/swagger';
+
+import {
+  ActivityDuration,
+  ActivityStatus,
+} from  '../../common/enums/common.enum'
+
 export class CreateActivityDto {
- @ApiProperty() @IsString() @MaxLength(255) title: string;
- @ApiProperty() @IsString() @MaxLength(255) topic: string;
- @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
- @ApiPropertyOptional() @IsOptional() @IsString() instructions?: string;
- @ApiPropertyOptional({ enum: ['DRAFT','PUBLISHED','CLOSED','ARCHIVED'] }) @IsOptional() @IsEnum(['DRAFT','PUBLISHED','CLOSED','ARCHIVED']) status?: string;
- @ApiPropertyOptional({ example: '2026-11-01T09:00:00Z' }) @IsOptional() @IsDateString() startsAt?: string;
- @ApiPropertyOptional({ example: '2026-11-01T10:00:00Z' }) @IsOptional() @IsDateString() endsAt?: string;
+
+  @ApiProperty({
+    example: 'Learning Regression',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  title: string;
+
+  @ApiProperty({
+    example: 'Regression',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  topic: string;
+
+  @ApiPropertyOptional({
+    example: 'Regression in Machine Learning',
+  })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({
+    enum: [20, 30, 45],
+    example: 30,
+    default: 30,
+  })
+  @IsOptional()
+  @IsEnum(ActivityDuration)
+  duration?: ActivityDuration;
+
+  @ApiProperty({
+    example: '2026-11-01',
+    description: 'Scheduled date in YYYY-MM-DD format',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'scheduledDate must use YYYY-MM-DD format',
+  })
+  scheduledDate: string;
+
+  @ApiPropertyOptional({
+    enum: ActivityStatus,
+  })
+  @IsOptional()
+  @IsEnum(ActivityStatus)
+  status?: ActivityStatus;
 }
-export class UpdateActivityDto {
- @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(255) title?: string;
- @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(255) topic?: string;
- @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
- @ApiPropertyOptional() @IsOptional() @IsString() instructions?: string;
- @ApiPropertyOptional({ enum: ['DRAFT','PUBLISHED','CLOSED','ARCHIVED'] }) @IsOptional() @IsEnum(['DRAFT','PUBLISHED','CLOSED','ARCHIVED']) status?: string;
- @ApiPropertyOptional() @IsOptional() @IsDateString() startsAt?: string;
- @ApiPropertyOptional() @IsOptional() @IsDateString() endsAt?: string;
-}
+
+export class UpdateActivityDto extends PartialType(
+  CreateActivityDto,
+) {}
+
+
