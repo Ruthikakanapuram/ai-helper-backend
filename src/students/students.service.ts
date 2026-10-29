@@ -29,6 +29,7 @@ export class StudentsService {
   ) { }
 
   async createBulk(dto: CreateStudentsBulkDto) {
+    console.log("studentbulk", dto)
     if (!dto.students?.length) {
       throw new BadRequestException(
         'At least one student is required',
@@ -79,50 +80,51 @@ export class StudentsService {
           }[] = [];
 
           for (const row of dto.students) {
-            // Generate a unique temporary password.
-            const temporaryPassword =
-              randomBytes(12).toString('base64url');
 
-            const passwordHash = await bcrypt.hash(
-              temporaryPassword,
-              12,
-            );
+  // Generate password from username
+  const username = row.username.trim();
+  const temporaryPassword = `${username}123`;
 
-            // 1. Create the user account.
-            const user = userRepo.create({
-              username: row.username.trim(),
-              passwordHash,
-              role: Role.STUDENT,
-              status: 'ACTIVE',
-            });
+  // Hash password before saving
+  const passwordHash = await bcrypt.hash(
+    temporaryPassword,
+    12,
+  );
 
-            const savedUser = await userRepo.save(user);
+  // Create user account
+  const user = userRepo.create({
+    username,
+    passwordHash,
+    role: Role.STUDENT,
+    status: 'ACTIVE',
+  });
 
-            // 2. Create the corresponding student profile.
-            const student = studentRepo.create({
-              userId: savedUser.id,
-              fullName: row.fullName.trim(),
-              rollNumber: row.rollNumber?.trim() || null,
-              year: row.year,
-              branch: row.branch,
-              section: row.section,
-            });
+  const savedUser = await userRepo.save(user);
 
-            const savedStudent = await studentRepo.save(student);
+  // Create student profile
+  const student = studentRepo.create({
+    userId: savedUser.id,
+    fullName: row.fullName.trim(),
+    rollNumber: row.rollNumber?.trim() || null,
+    year: row.year,
+    branch: row.branch,
+    section: row.section,
+  });
 
-            // Return the temporary password only once.
-            createdStudents.push({
-              id: savedStudent.id,
-              userId: savedUser.id,
-              username: savedUser.username,
-              fullName: savedStudent.fullName,
-              rollNumber: savedStudent.rollNumber,
-              year: savedStudent.year,
-              branch: savedStudent.branch,
-              section: savedStudent.section,
-              temporaryPassword,
-            });
-          }
+  const savedStudent = await studentRepo.save(student);
+
+  createdStudents.push({
+    id: savedStudent.id,
+    userId: savedUser.id,
+    username: savedUser.username,
+    fullName: savedStudent.fullName,
+    rollNumber: savedStudent.rollNumber,
+    year: savedStudent.year,
+    branch: savedStudent.branch,
+    section: savedStudent.section,
+    temporaryPassword,
+  });
+}
 
           return {
             message: 'Students created successfully',

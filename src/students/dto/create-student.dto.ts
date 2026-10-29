@@ -22,12 +22,12 @@ export class CreateStudentDto {
   @IsNotEmpty()
   username: string;
 
-  @ApiProperty({
-    example: 'StrongPass123!',
-  })
-  @IsString()
-  @MinLength(8)
-  password: string;
+  // @ApiProperty({
+  //   example: 'StrongPass123!',
+  // })
+  // @IsString()
+  // @MinLength(8)
+  // password: string;
 
   @ApiProperty({
     example: 'Rahul Kumar',

@@ -40,8 +40,8 @@ export class StudentsController {
   ) {}
 
   @Post('bulk-students')
-  @Roles(Role.ADMIN)
-  create(@Body() dto: CreateStudentsBulkDto) {
+  @Roles(Role.ADMIN, Role.TEACHER)
+  createBulk(@Body() dto: CreateStudentsBulkDto) {
     return this.studentsService.createBulk(dto);
   }
 
