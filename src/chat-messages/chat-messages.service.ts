@@ -94,33 +94,63 @@ export class ChatMessagesService {
  }
 
  
+
 async getChatHistory(
   sessionId: number,
   user: Principal,
+  limit = 30,
+  beforeId?: string,
 ) {
-  // Step 1: Verify that the requesting user
-  // is allowed to access this session.
-  const session = await this.sessions.assertAccess(
-    sessionId,
-    user,
-  );
+  // Verify that the requesting user can access this session.
+  const session = await this.sessions.assertAccess(sessionId, user);
 
-  // Step 2: Retrieve all conversation turns.
-  // No status filter: include historical messages
-  // from ACTIVE, COMPLETED, EXPIRED and
-  // TERMINATED sessions.
-  const messages = await this.repo.find({
-    where: {
+  // Validate and restrict the page size.
+  const pageSize = Math.min(Math.max(Number(limit) || 30, 1), 100);
+
+  // Build a query scoped to this session.
+  const query = this.repo
+    .createQueryBuilder('message')
+    .where('message.sessionId = :sessionId', {
       sessionId: session.id,
-    },
-    order: {
-      turnNumber: 'ASC',
-      id: 'ASC',
-    },
-  });
+    });
 
-  // Step 3: Return only the fields needed
-  // for the chat history interface.
+  // Fetch only messages older than the supplied cursor.
+  // Keep the cursor as a string to avoid bigint precision loss.
+  if (beforeId !== undefined) {
+    if (!/^\d+$/.test(beforeId)) {
+      throw new BadRequestException('Invalid beforeId cursor');
+    }
+
+    query.andWhere('message.id < :beforeId', {
+      beforeId,
+    });
+  }
+
+  // Fetch one extra record to determine whether older messages exist.
+  const results = await query
+    .orderBy('message.id', 'DESC')
+    .take(pageSize + 1)
+    .getMany();
+
+  const hasMore = results.length > pageSize;
+
+  // Remove the extra record used for pagination detection.
+  const page = results.slice(0, pageSize);
+
+  // Reverse so the frontend receives chronological order.
+  page.reverse();
+
+  const messages = page.map((message) => ({
+    id: String(message.id),
+    sessionId: String(message.sessionId),
+    turnNumber: message.turnNumber,
+    prompt: message.prompt,
+    response: message.response,
+    status: message.status,
+    createdAt: message.createdAt,
+    completedAt: message.completedAt,
+  }));
+
   return {
     session: {
       id: String(session.id),
@@ -131,21 +161,18 @@ async getChatHistory(
       endedAt: session.endedAt,
     },
 
-    messages: messages.map((message) => ({
-      id: String(message.id),
-      sessionId: String(message.sessionId),
-      turnNumber: message.turnNumber,
+    messages,
 
-      prompt: message.prompt,
-      response: message.response,
-
-      status: message.status,
-
-      createdAt: message.createdAt,
-      completedAt: message.completedAt,
-    })),
+    pagination: {
+      limit: pageSize,
+      hasMore,
+      nextCursor: hasMore && page.length > 0
+        ? String(page[0].id)
+        : null,
+    },
   };
 }
+
 
  async findAll(user: Principal, sessionId: number) {
   await this.sessions.assertAccess(sessionId, user);

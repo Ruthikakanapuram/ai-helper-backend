@@ -51,6 +51,15 @@ export class ActivitiesController {
     return this.service.create(dto, req.user);
   }
 
+@Get(':id/monitor')
+@Roles(Role.ADMIN, Role.TEACHER)
+getActivityMonitor(
+  @Param('id', ParseIntPipe) id: number,
+  @Req() req: { user: Principal },
+) {
+  return this.service.getActivityMonitor(id, req.user);
+}
+
   // Get activities according to logged-in role
   @Get()
   findAll(

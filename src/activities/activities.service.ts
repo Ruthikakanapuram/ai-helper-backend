@@ -27,7 +27,7 @@ import {
 import { Principal } from '../common/guards/ownership';
 import { Role } from '../common/enums/role.enum';
 import { ChatSession } from 'src/chat-sessions/chat-session.entity';
-
+import { ChatMessage } from '../chat-messages/chat-message.entity';
 @Injectable()
 export class ActivitiesService {
   constructor(
@@ -482,6 +482,98 @@ async findAll(user: Principal) {
       });
     }
   }
+
+// getActivityMonitor returns a list of all students assigned to an activity, along with their chat session status and last message timestamp.
+async getActivityMonitor(
+  activityId: number,
+  user: Principal,
+) {
+  // Verify that the activity exists and the requester
+  // is its owner or an authorized admin.
+  const activity = await this.requireOwner(activityId, user);
+
+  // Fetch every assigned student, including those
+  // who have not created a chat session.
+  const students = await this.activityStudentRepo
+    .createQueryBuilder('assignment')
+    .innerJoin('assignment.student', 'student')
+    .innerJoin('student.user', 'studentUser')
+    .leftJoin(
+      ChatSession,
+      'session',
+      'session.activityId = assignment.activityId ' +
+        'AND session.studentId = assignment.studentId',
+    )
+    .leftJoin(
+      ChatMessage,
+      'message',
+      'message.sessionId = session.id',
+    )
+    .where('assignment.activityId = :activityId', {
+      activityId,
+    })
+    .select([
+      'student.id AS studentId',
+      'student.userId AS userId',
+      'student.fullName AS name',
+      'student.rollNumber AS rollNumber',
+      'student.year AS year',
+      'student.branch AS branch',
+      'student.section AS section',
+      'session.id AS sessionId',
+      'session.status AS sessionStatus',
+      'session.startedAt AS sessionStartedAt',
+      'session.endedAt AS sessionEndedAt',
+      'MAX(message.createdAt) AS lastMessageAt',
+    ])
+    .groupBy('student.id')
+    .addGroupBy('student.userId')
+    .addGroupBy('student.fullName')
+    .addGroupBy('student.rollNumber')
+    .addGroupBy('student.year')
+    .addGroupBy('student.branch')
+    .addGroupBy('student.section')
+    .addGroupBy('session.id')
+    .addGroupBy('session.status')
+    .addGroupBy('session.startedAt')
+    .addGroupBy('session.endedAt')
+    .orderBy('student.fullName', 'ASC')
+    .getRawMany();
+
+  return {
+    activity: {
+      id: String(activity.id),
+      title: activity.title,
+      topic: activity.topic,
+      description: activity.description,
+      duration: activity.duration,
+      status: activity.status,
+      startedAt: activity.startedAt,
+      endedAt: activity.endedAt,
+    },
+
+    students: students.map((student) => ({
+      studentId: String(student.studentId),
+      userId: String(student.userId),
+      name: student.name,
+      rollNumber: student.rollNumber,
+      year: student.year,
+      branch: student.branch,
+      section: student.section,
+
+      sessionId: student.sessionId
+        ? String(student.sessionId)
+        : null,
+
+      sessionStatus: student.sessionStatus ?? null,
+      sessionStartedAt: student.sessionStartedAt ?? null,
+      sessionEndedAt: student.sessionEndedAt ?? null,
+      lastMessageAt: student.lastMessageAt ?? null,
+
+      hasStarted: student.sessionId !== null,
+    })),
+  };
+}
 
 
 }

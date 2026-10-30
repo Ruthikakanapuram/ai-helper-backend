@@ -7,12 +7,13 @@ import { ActivityStudent } from './activity-student.entity';
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
 import { ActivityExpirationScheduler } from './activity-expiration.scheduler';
-
+import { ChatMessage } from '../chat-messages/chat-message.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       Activity,
       ActivityStudent,
+      ChatMessage,
     ]),
   ],
   controllers: [ActivitiesController],

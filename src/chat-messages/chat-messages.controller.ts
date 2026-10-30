@@ -15,17 +15,25 @@ export class ChatMessagesController {
  @Post() @Roles(Role.ADMIN, Role.STUDENT) create(@Body() dto: CreateChatMessageDto, @Req() req: { user: Principal }) { return this.service.create(dto, req.user); }
 
  
+
 @Get('session/:sessionId/history')
 @Roles(Role.STUDENT, Role.TEACHER, Role.ADMIN)
+@ApiQuery({ name: 'limit', required: false, type: Number, example: 30 })
+@ApiQuery({ name: 'beforeId', required: false, type: String })
 getChatHistory(
   @Param('sessionId', ParseIntPipe) sessionId: number,
+  @Query('limit') limit: string,
+  @Query('beforeId') beforeId: string,
   @Req() req: { user: Principal },
 ) {
   return this.service.getChatHistory(
     sessionId,
     req.user,
+    Number(limit) || 30,
+    beforeId,
   );
 }
+
 
  @Get() @ApiQuery({ name: 'sessionId', required: true, type: Number })
  findAll(@Query('sessionId', ParseIntPipe) sessionId: number, @Req() req: { user: Principal }) { return this.service.findAll(req.user, sessionId); }
