@@ -147,4 +147,25 @@ export class StudentsService {
 
     }
   }
+
+  async findByUser(userId:number){
+    try{
+const studentData=await this.studentRepository.findOne({
+  where:{user:{id:userId}}
+})
+return {
+  error:false, data:studentData
+}
+    }catch(error){
+ if (
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to search students.',
+      );    }
+  }
 }

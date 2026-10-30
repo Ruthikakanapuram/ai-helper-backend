@@ -6,5 +6,6 @@ import { ChatMessage } from './chat-message.entity';
 import { ChatMessagesController } from './chat-messages.controller';
 import { ChatMessagesService } from './chat-messages.service';
 import { ChatSessionsModule } from '../chat-sessions/chat-sessions.module';
-@Module({ imports: [TypeOrmModule.forFeature([ChatMessage]), ChatSessionsModule, AiModule, RealtimeModule], providers: [ChatMessagesService], controllers: [ChatMessagesController] })
+import { StudentsModule } from 'src/students/students.module';
+@Module({ imports: [TypeOrmModule.forFeature([ChatMessage]), ChatSessionsModule, AiModule, RealtimeModule,StudentsModule], providers: [ChatMessagesService], controllers: [ChatMessagesController] })
 export class ChatMessagesModule {}

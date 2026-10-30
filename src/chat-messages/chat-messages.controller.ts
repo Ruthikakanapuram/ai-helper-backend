@@ -13,6 +13,20 @@ export class ChatMessagesController {
  constructor(private service: ChatMessagesService) {}
  @Post('send') @Roles(Role.STUDENT) send(@Body() dto: SendChatDto, @Req() req: { user: Principal }) { return this.service.send(dto, req.user); }
  @Post() @Roles(Role.ADMIN, Role.STUDENT) create(@Body() dto: CreateChatMessageDto, @Req() req: { user: Principal }) { return this.service.create(dto, req.user); }
+
+ 
+@Get('session/:sessionId/history')
+@Roles(Role.STUDENT, Role.TEACHER, Role.ADMIN)
+getChatHistory(
+  @Param('sessionId', ParseIntPipe) sessionId: number,
+  @Req() req: { user: Principal },
+) {
+  return this.service.getChatHistory(
+    sessionId,
+    req.user,
+  );
+}
+
  @Get() @ApiQuery({ name: 'sessionId', required: true, type: Number })
  findAll(@Query('sessionId', ParseIntPipe) sessionId: number, @Req() req: { user: Principal }) { return this.service.findAll(req.user, sessionId); }
  @Get(':id') findOne(@Param('id', ParseIntPipe) id: number, @Req() req: { user: Principal }) { return this.service.findOne(id, req.user); }

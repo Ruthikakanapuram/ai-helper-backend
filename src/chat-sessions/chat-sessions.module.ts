@@ -4,5 +4,6 @@ import { ChatSession } from './chat-session.entity';
 import { ChatSessionsController } from './chat-sessions.controller';
 import { ChatSessionsService } from './chat-sessions.service';
 import { ActivitiesModule } from '../activities/activities.module';
-@Module({ imports: [TypeOrmModule.forFeature([ChatSession]), ActivitiesModule], providers: [ChatSessionsService], controllers: [ChatSessionsController], exports: [ChatSessionsService] })
+import { Student } from 'src/students/entities/student.entity';
+@Module({ imports: [TypeOrmModule.forFeature([ChatSession,Student]), ActivitiesModule], providers: [ChatSessionsService], controllers: [ChatSessionsController], exports: [ChatSessionsService] })
 export class ChatSessionsModule {}

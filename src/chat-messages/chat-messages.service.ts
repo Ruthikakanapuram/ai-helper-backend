@@ -10,9 +10,10 @@ import { CreateChatMessageDto, UpdateChatMessageDto } from './dto/chat-message.d
 import { ChatSessionsService } from '../chat-sessions/chat-sessions.service';
 import { Principal } from '../common/guards/ownership';
 import { Role } from '../common/enums/role.enum';
+import { StudentsService } from 'src/students/students.service';
 @Injectable()
 export class ChatMessagesService {
- constructor(@InjectRepository(ChatMessage) private repo: Repository<ChatMessage>, private sessions: ChatSessionsService, private ai: AiService, private realtime: RealtimeGateway) {}
+ constructor(@InjectRepository(ChatMessage) private repo: Repository<ChatMessage>, private sessions: ChatSessionsService, private ai: AiService, private realtime: RealtimeGateway, private studentService: StudentsService) {}
  // Demonstration per-session serialization (single NestJS process only).
  // For multiple replicas replace with a durable distributed per-session queue.
  private readonly queues = new Map<number, Promise<unknown>>();
@@ -29,7 +30,8 @@ export class ChatMessagesService {
 
  private async processSend(dto: SendChatDto, user: Principal) {
   const session = await this.sessions.assertAccess(dto.sessionId, user);
-  if (session.studentId !== user.userId) throw new ForbiddenException('Not your chat session');
+  const studentData= await this.studentService.findByUser(user.userId);
+  if (session.studentId !== studentData.data?.id) throw new ForbiddenException('Not your chat session');
   if (session.status !== 'ACTIVE' || session.activity.status !== 'PUBLISHED')
    throw new BadRequestException('Session or activity not active');
 
@@ -90,6 +92,61 @@ export class ChatMessagesService {
   // This endpoint stores the prompt; the future OpenAI worker will fill the response in the same row.
   return this.repo.save(this.repo.create({ ...dto, status: 'PENDING' }));
  }
+
+ 
+async getChatHistory(
+  sessionId: number,
+  user: Principal,
+) {
+  // Step 1: Verify that the requesting user
+  // is allowed to access this session.
+  const session = await this.sessions.assertAccess(
+    sessionId,
+    user,
+  );
+
+  // Step 2: Retrieve all conversation turns.
+  // No status filter: include historical messages
+  // from ACTIVE, COMPLETED, EXPIRED and
+  // TERMINATED sessions.
+  const messages = await this.repo.find({
+    where: {
+      sessionId: session.id,
+    },
+    order: {
+      turnNumber: 'ASC',
+      id: 'ASC',
+    },
+  });
+
+  // Step 3: Return only the fields needed
+  // for the chat history interface.
+  return {
+    session: {
+      id: String(session.id),
+      activityId: String(session.activityId),
+      studentId: String(session.studentId),
+      status: session.status,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+    },
+
+    messages: messages.map((message) => ({
+      id: String(message.id),
+      sessionId: String(message.sessionId),
+      turnNumber: message.turnNumber,
+
+      prompt: message.prompt,
+      response: message.response,
+
+      status: message.status,
+
+      createdAt: message.createdAt,
+      completedAt: message.completedAt,
+    })),
+  };
+}
+
  async findAll(user: Principal, sessionId: number) {
   await this.sessions.assertAccess(sessionId, user);
   return this.repo.find({ where: { sessionId }, order: { turnNumber: 'ASC' } });

@@ -13,6 +13,6 @@ export class ChatSessionsController {
  @Post() @Roles(Role.ADMIN, Role.STUDENT) create(@Body() dto: CreateChatSessionDto, @Req() req: { user: Principal }) { return this.service.create(dto, req.user); }
  @Get() findAll(@Req() req: { user: Principal }, @Query('activityId') activityId?: string) { return this.service.findAll(req.user, activityId ? Number(activityId) : undefined); }
  @Get(':id') findOne(@Param('id', ParseIntPipe) id: number, @Req() req: { user: Principal }) { return this.service.assertAccess(id, req.user); }
- @Patch(':id') update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateChatSessionDto, @Req() req: { user: Principal }) { return this.service.update(id, dto, req.user); }
+//  @Patch(':id') update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateChatSessionDto, @Req() req: { user: Principal }) { return this.service.update(id, dto, req.user); }
  @Delete(':id') @Roles(Role.ADMIN) remove(@Param('id', ParseIntPipe) id: number, @Req() req: { user: Principal }) { return this.service.remove(id, req.user); }
 }
