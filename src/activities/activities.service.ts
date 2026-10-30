@@ -1,6 +1,7 @@
 
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -8,20 +9,23 @@ import {
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import {
   ActivityDuration,
   ActivityStatus,
+  ChatSessionStatus,
 } from '../common/enums/common.enum';
 import { Activity } from './activity.entity';
 import {
   CreateActivityDto,
   UpdateActivityDto,
+  UpdateActivityStatusDto
 } from './dto/activity.dto';
 
 import { Principal } from '../common/guards/ownership';
 import { Role } from '../common/enums/role.enum';
+import { ChatSession } from 'src/chat-sessions/chat-session.entity';
 
 @Injectable()
 export class ActivitiesService {
@@ -29,6 +33,8 @@ export class ActivitiesService {
   constructor(
     @InjectRepository(Activity)
     private readonly repo: Repository<Activity>,
+      private readonly dataSource: DataSource,
+
   ) {}
 
   // Validate a real calendar date
@@ -85,7 +91,7 @@ export class ActivitiesService {
       description: dto.description ?? null,
       duration,
       scheduledDate: dto.scheduledDate,
-      status: dto.status ?? ActivityStatus.DRAFT,
+      status: dto.status ?? ActivityStatus.SCHEDULED,
       teacherId: user.userId,
     });
 
@@ -209,4 +215,124 @@ export class ActivitiesService {
 
     return { deleted: true };
   }
+
+  
+async updateStatus(
+  id: number,
+  newStatus: ActivityStatus,
+  user: Principal,
+) {
+  // Verify activity exists and logged-in user owns it.
+  const activity = await this.requireOwner(id, user);
+
+  let expectedStatus: ActivityStatus;
+  const now = new Date();
+
+  const changes: Partial<Activity> = {
+    status: newStatus,
+  };
+
+  if (newStatus === ActivityStatus.PUBLISHED) {
+    // Start only a scheduled activity.
+    expectedStatus = ActivityStatus.SCHEDULED;
+
+    changes.startedAt = now;
+    changes.endedAt = null;
+  } else if (newStatus === ActivityStatus.CLOSED) {
+    // Stop only an activity that was started.
+    expectedStatus = ActivityStatus.PUBLISHED;
+
+    changes.endedAt = now;
+  } else {
+    throw new BadRequestException(
+      'Unsupported activity status transition',
+    );
+  }
+
+  if (activity.status !== expectedStatus) {
+    throw new ConflictException(
+      `Cannot change activity from ${activity.status} to ${newStatus}`,
+    );
+  }
+
+  // Conditional database update prevents two competing
+  // requests from both transitioning the same activity.
+  const result = await this.repo.update(
+    {
+      id,
+      status: expectedStatus,
+    },
+    changes,
+  );
+
+  if (result.affected !== 1) {
+    throw new ConflictException(
+      'Activity status was changed by another request',
+    );
+  }
+
+  return this.findOne(id, user);
+}
+
+
+
+async closeExpiredActivities(): Promise<void> {
+  // Get all currently published activities that have
+  // reached their scheduled expiration time.
+  const expiredActivities = await this.repo
+    .createQueryBuilder('activity')
+    .where('activity.status = :status', {
+      status: ActivityStatus.PUBLISHED,
+    })
+    .andWhere('activity.started_at IS NOT NULL')
+    .andWhere(
+      'TIMESTAMPADD(MINUTE, activity.duration, activity.started_at) <= UTC_TIMESTAMP(6)',
+    )
+    .getMany();
+
+  for (const activity of expiredActivities) {
+    // Transactionally close the activity
+    // and expire its active student sessions.
+    await this.dataSource.transaction(async (manager) => {
+      const result = await manager
+        .createQueryBuilder()
+        .update(Activity)
+        .set({
+          status: ActivityStatus.CLOSED,
+          endedAt: new Date(),
+        })
+        .where('id = :id', { id: activity.id })
+        .andWhere('status = :status', {
+          status: ActivityStatus.PUBLISHED,
+        })
+        .andWhere(
+          'TIMESTAMPADD(MINUTE, duration, started_at) <= UTC_TIMESTAMP(6)',
+        )
+        .execute();
+
+      // Only expire sessions if the activity
+      // was successfully transitioned.
+      if (result.affected !== 1) {
+        return;
+      }
+
+      await manager
+        .createQueryBuilder()
+        .update(ChatSession)
+        .set({
+          status: ChatSessionStatus.EXPIRED,
+          endedAt: new Date(),
+        })
+        .where('activity_id = :activityId', {
+          activityId: activity.id,
+        })
+        .andWhere('status = :status', {
+          status: ChatSessionStatus.ACTIVE,
+        })
+        .execute();
+    });
+  }
+}
+
+
 }

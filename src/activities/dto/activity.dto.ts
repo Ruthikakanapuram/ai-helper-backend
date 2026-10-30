@@ -78,3 +78,14 @@ export class UpdateActivityDto extends PartialType(
 ) {}
 
 
+export class UpdateActivityStatusDto {
+  @ApiProperty({
+    enum: ['PUBLISHED', 'CLOSED'],
+    example: 'PUBLISHED',
+  })
+  @IsIn([
+    ActivityStatus.PUBLISHED,
+    ActivityStatus.CLOSED,
+  ])
+  status: ActivityStatus;
+}

@@ -15,6 +15,7 @@ import { ActivityDuration, ActivityStatus } from 'src/common/enums/common.enum';
 
 
 @Entity('activities')
+@Index('idx_activities_teacher_id', ['teacherId'])
 @Index('idx_activities_teacher_status', ['teacherId', 'status'])
 export class Activity {
   @PrimaryGeneratedColumn({
@@ -68,7 +69,7 @@ export class Activity {
   @Column({
     type: 'enum',
     enum: ActivityStatus,
-    default: ActivityStatus.DRAFT,
+    default: ActivityStatus.SCHEDULED,
   })
   status: ActivityStatus;
   @Column({

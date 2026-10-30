@@ -11,8 +11,16 @@ export enum ActivityDuration {
 }
 
 export enum ActivityStatus {
-  DRAFT = 'DRAFT',
+  SCHEDULED = 'SCHEDULED',
   PUBLISHED = 'PUBLISHED',
   CLOSED = 'CLOSED',
   ARCHIVED = 'ARCHIVED',
+}
+
+
+export enum ChatSessionStatus {
+  ACTIVE = 'ACTIVE',
+  COMPLETED = 'COMPLETED',
+  EXPIRED = 'EXPIRED',
+  TERMINATED = 'TERMINATED',
 }

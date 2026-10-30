@@ -22,6 +22,7 @@ import { ActivitiesService } from './activities.service';
 import {
   CreateActivityDto,
   UpdateActivityDto,
+  UpdateActivityStatusDto 
 } from './dto/activity.dto';
 
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -87,4 +88,19 @@ export class ActivitiesController {
   ) {
     return this.service.remove(id, req.user);
   }
+  
+@Patch(':id/status')
+@Roles(Role.ADMIN, Role.TEACHER)
+updateStatus(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() dto: UpdateActivityStatusDto,
+  @Req() req: { user: Principal },
+) {
+  return this.service.updateStatus(
+    id,
+    dto.status,
+    req.user,
+  );
+}
+
 }
