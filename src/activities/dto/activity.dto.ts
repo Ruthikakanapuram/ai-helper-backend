@@ -7,6 +7,11 @@ import {
   IsIn,
   Matches,
   MaxLength,
+   IsArray,
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsInt,
+  Min,
 } from 'class-validator';
 
 import {
@@ -30,13 +35,14 @@ export class CreateActivityDto {
   @MaxLength(255)
   title: string;
 
-  @ApiProperty({
-    example: 'Regression',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  topic: string;
+  @ApiPropertyOptional({
+  example: 'Regression',
+  description: 'Optional topic for the activity',
+})
+@IsOptional()
+@IsString()
+@MaxLength(255)
+topic?: string;
 
   @ApiPropertyOptional({
     example: 'Regression in Machine Learning',
@@ -71,6 +77,17 @@ export class CreateActivityDto {
   @IsOptional()
   @IsEnum(ActivityStatus)
   status?: ActivityStatus;
+  @ApiProperty({
+  example: [1, 2, 3],
+  description: 'IDs from the students table to assign to this activity',
+  type: [Number],
+})
+@IsArray()
+@ArrayNotEmpty()
+@ArrayUnique()
+@IsInt({ each: true })
+@Min(1, { each: true })
+studentIds: number[];
 }
 
 export class UpdateActivityDto extends PartialType(

@@ -40,8 +40,12 @@ export class Activity {
   @Column({ length: 255 })
   title: string;
 
-  @Column({ length: 255 })
-  topic: string;
+@Column({
+  type: 'varchar',
+  length: 255,
+  nullable: true,
+})
+topic: string | null;
 
   @Column({
     type: 'text',

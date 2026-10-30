@@ -9,8 +9,9 @@ import {
 
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { DataSource, Repository } from 'typeorm';
-
+import { DataSource, In, Repository } from 'typeorm';
+import { Student } from '../students/entities/student.entity';
+import { ActivityStudent } from './activity-student.entity';
 import {
   ActivityDuration,
   ActivityStatus,
@@ -29,13 +30,15 @@ import { ChatSession } from 'src/chat-sessions/chat-session.entity';
 
 @Injectable()
 export class ActivitiesService {
+constructor(
+  @InjectRepository(Activity)
+  private readonly repo: Repository<Activity>,
 
-  constructor(
-    @InjectRepository(Activity)
-    private readonly repo: Repository<Activity>,
-      private readonly dataSource: DataSource,
+  @InjectRepository(ActivityStudent)
+  private readonly activityStudentRepo: Repository<ActivityStudent>,
 
-  ) {}
+  private readonly dataSource: DataSource,
+) {}
 
   // Validate a real calendar date
   private validateScheduledDate(date: string): void {
@@ -75,19 +78,52 @@ export class ActivitiesService {
 
   // CREATE
   async create(
-    dto: CreateActivityDto,
-    user: Principal,
-  ) {
-    this.validateScheduledDate(dto.scheduledDate);
+  dto: CreateActivityDto,
+  user: Principal,
+) {
+  this.validateScheduledDate(dto.scheduledDate);
 
-    const duration =
-      dto.duration ?? ActivityDuration.THIRTY_MINUTES;
+  const duration =
+    dto.duration ?? ActivityDuration.THIRTY_MINUTES;
 
-    this.validateDuration(duration);
+  this.validateDuration(duration);
 
-    const activity = this.repo.create({
+  const studentIds = [...new Set(dto.studentIds ?? [])];
+
+  if (studentIds.length === 0) {
+    throw new BadRequestException(
+      'Select at least one student',
+    );
+  }
+
+  return this.repo.manager.transaction(async (manager) => {
+    const studentRepo = manager.getRepository(Student);
+    const activityRepo = manager.getRepository(Activity);
+    const assignmentRepo = manager.getRepository(ActivityStudent);
+
+    // Validate selected IDs against the students table.
+    const students = await studentRepo.find({
+      where: {
+        id: In(studentIds),
+        user: {
+          role: Role.STUDENT,
+          status: 'ACTIVE',
+        },
+      },
+      relations: {
+        user: true,
+      },
+    });
+
+    if (students.length !== studentIds.length) {
+      throw new BadRequestException(
+        'One or more selected students do not exist or are inactive',
+      );
+    }
+
+    const activity = activityRepo.create({
       title: dto.title,
-      topic: dto.topic,
+  topic: dto.title.trim(),
       description: dto.description ?? null,
       duration,
       scheduledDate: dto.scheduledDate,
@@ -95,59 +131,119 @@ export class ActivitiesService {
       teacherId: user.userId,
     });
 
-    return this.repo.save(activity);
-  }
+    const savedActivity = await activityRepo.save(activity);
+
+    const assignments = studentIds.map((studentId) =>
+      assignmentRepo.create({
+        activityId: savedActivity.id,
+        studentId,
+      }),
+    );
+
+    await assignmentRepo.save(assignments);
+
+    return {
+      message: 'Activity created and students assigned successfully',
+      activity: savedActivity,
+      assignedStudentIds: studentIds,
+      assignedCount: studentIds.length,
+    };
+  });
+}
 
   // GET ALL
-  findAll(user: Principal) {
+ async findAll(user: Principal) {
+  if (user.role === Role.ADMIN) {
     return this.repo.find({
-      where:
-        user.role === Role.ADMIN
-          ? {}
-          : user.role === Role.TEACHER
-            ? { teacherId: user.userId }
-            : { status: ActivityStatus.PUBLISHED },
-
-      order: {
-        id: 'DESC',
-      },
+      order: { id: 'DESC' },
     });
   }
 
-  // GET ONE
-  async findOne(
-    id: number,
-    user?: Principal,
-  ) {
-    const item = await this.repo.findOneBy({ id });
-
-    if (!item) {
-      throw new NotFoundException(
-        'Activity not found',
-      );
-    }
-
-    if (
-      user?.role === Role.TEACHER &&
-      item.teacherId !== user.userId
-    ) {
-      throw new ForbiddenException(
-        'Not your activity',
-      );
-    }
-
-    if (
-      user?.role === Role.STUDENT &&
-      item.status !== ActivityStatus.PUBLISHED
-    ) {
-      throw new ForbiddenException(
-        'Activity unavailable',
-      );
-    }
-
-    return item;
+  if (user.role === Role.TEACHER) {
+    return this.repo.find({
+      where: { teacherId: user.userId },
+      order: { id: 'DESC' },
+    });
   }
 
+  // Find the student's profile ID from their user ID.
+  const student = await this.repo.manager
+    .getRepository(Student)
+    .findOne({
+      where: { userId: user.userId },
+      select: { id: true },
+    });
+
+  if (!student) {
+    return [];
+  }
+
+  // Return only published activities assigned to this student.
+  return this.repo
+    .createQueryBuilder('activity')
+    .innerJoin(
+      ActivityStudent,
+      'assignment',
+      'assignment.activityId = activity.id',
+    )
+    .where('assignment.studentId = :studentId', {
+      studentId: student.id,
+    })
+    .andWhere('activity.status = :status', {
+      status: ActivityStatus.PUBLISHED,
+    })
+    .orderBy('activity.id', 'DESC')
+    .getMany();
+}
+
+  // GET ONE
+  async findOne(
+  id: number,
+  user?: Principal,
+) {
+  const item = await this.repo.findOneBy({ id });
+
+  if (!item) {
+    throw new NotFoundException('Activity not found');
+  }
+
+  if (user?.role === Role.TEACHER &&
+      item.teacherId !== user.userId) {
+    throw new ForbiddenException('Not your activity');
+  }
+
+  if (user?.role === Role.STUDENT) {
+    if (item.status !== ActivityStatus.PUBLISHED) {
+      throw new ForbiddenException('Activity unavailable');
+    }
+
+    const student = await this.repo.manager
+      .getRepository(Student)
+      .findOne({
+        where: { userId: user.userId },
+        select: { id: true },
+      });
+
+    if (!student) {
+      throw new ForbiddenException('Student profile not found');
+    }
+
+    const assigned = await this.activityStudentRepo.exists({
+      where: {
+        activityId: item.id,
+        studentId: student.id,
+      },
+    });
+
+    if (!assigned) {
+      throw new ForbiddenException(
+        'This activity is not assigned to you',
+      );
+    }
+  }
+
+  return item;
+}
   // CHECK OWNERSHIP
   async requireOwner(
     id: number,

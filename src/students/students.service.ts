@@ -27,7 +27,47 @@ export class StudentsService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) { }
+  // get all students with optional filters for branch, year, and section
+async findAll(filters: {
+  branch?: Branch;
+  year?: Year;
+  section?: Section;
+}) {
+  const query = this.studentRepository
+    .createQueryBuilder('student')
+    .select([
+      'student.id',
+      'student.fullName',
+      'student.rollNumber',
+      'student.year',
+      'student.branch',
+      'student.section',
+    ]);
 
+  if (filters.branch) {
+    query.andWhere('student.branch = :branch', {
+      branch: filters.branch,
+    });
+  }
+
+  if (filters.year) {
+    query.andWhere('student.year = :year', {
+      year: filters.year,
+    });
+  }
+
+  if (filters.section) {
+    query.andWhere('student.section = :section', {
+      section: filters.section,
+    });
+  }
+
+  const students = await query
+    .orderBy('student.fullName', 'ASC')
+    .getMany();
+
+  return { students };
+}
   async createBulk(dto: CreateStudentsBulkDto) {
     console.log("studentbulk", dto)
     if (!dto.students?.length) {

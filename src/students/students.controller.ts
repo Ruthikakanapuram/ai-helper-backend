@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   Req,
+  Query,
 } from '@nestjs/common';
 
 import {
@@ -28,7 +29,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { requireSelfOrAdmin, Principal } from '../common/guards/ownership';
-
+import { Branch, Section, Year } from '../common/enums/common.enum';
 @ApiTags('Students')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -45,11 +46,15 @@ export class StudentsController {
     return this.studentsService.createBulk(dto);
   }
 
-  // @Get()
-  // @Roles(Role.ADMIN, Role.TEACHER)
-  // findAll() {
-  //   return this.studentsService.findAll();
-  // }
+ @Get()
+@Roles(Role.ADMIN, Role.TEACHER)
+findAll(
+  @Query('branch') branch?: Branch,
+  @Query('year') year?: Year,
+  @Query('section') section?: Section,
+) {
+  return this.studentsService.findAll({ branch, year, section });
+}
 
   // @Get(':id')
   // @Roles(Role.ADMIN, Role.TEACHER)
