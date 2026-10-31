@@ -79,7 +79,7 @@ topic: string | null;
   @Column({
   name: 'started_at',
   type: 'datetime',
-  precision: 6,
+
   nullable: true,
 })
 startedAt: Date | null;
@@ -87,7 +87,6 @@ startedAt: Date | null;
 @Column({
   name: 'ended_at',
   type: 'datetime',
-  precision: 6,
   nullable: true,
 })
 endedAt: Date | null;
