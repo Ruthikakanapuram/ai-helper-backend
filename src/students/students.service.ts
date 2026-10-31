@@ -28,6 +28,7 @@ export class StudentsService {
     private readonly userRepository: Repository<User>,
   ) { }
   // get all students with optional filters for branch, year, and section
+// Get all students with optional filters for branch, year, and section
 async findAll(filters: {
   branch?: Branch;
   year?: Year;
@@ -35,6 +36,7 @@ async findAll(filters: {
 }) {
   const query = this.studentRepository
     .createQueryBuilder('student')
+    .leftJoin('student.user', 'user')
     .select([
       'student.id',
       'student.fullName',
@@ -42,6 +44,8 @@ async findAll(filters: {
       'student.year',
       'student.branch',
       'student.section',
+      'user.id',
+      'user.username',
     ]);
 
   if (filters.branch) {
@@ -66,8 +70,19 @@ async findAll(filters: {
     .orderBy('student.fullName', 'ASC')
     .getMany();
 
-  return { students };
+  return {
+    students: students.map((student) => ({
+      id: student.id,
+      username: student.user?.username,
+      fullName: student.fullName,
+      rollNumber: student.rollNumber,
+      year: student.year,
+      branch: student.branch,
+      section: student.section,
+    })),
+  };
 }
+
   async createBulk(dto: CreateStudentsBulkDto) {
     console.log("studentbulk", dto)
     if (!dto.students?.length) {

@@ -68,13 +68,19 @@ export class ActivitiesService {
   }
 
   // Validate duration
-  private validateDuration(duration: number): void {
-    if (![20, 30, 45].includes(duration)) {
-      throw new BadRequestException(
-        'Duration must be 20, 30, or 45 minutes',
-      );
-    }
+ // Validate duration: 5 to 120 minutes, in multiples of 5
+private validateDuration(duration: number): void {
+  if (
+    !Number.isInteger(duration) ||
+    duration < 5 ||
+    duration > 120 ||
+    duration % 5 !== 0
+  ) {
+    throw new BadRequestException(
+      'Duration must be between 5 and 120 minutes in multiples of 5',
+    );
   }
+}
 
   // CREATE
   async create(

@@ -52,13 +52,13 @@ topic?: string;
   description?: string;
 
   @ApiPropertyOptional({
-    enum: [20, 30, 45],
-    example: 30,
-    default: 30,
-  })
-  @IsOptional()
-  @IsEnum(ActivityDuration)
-  duration?: ActivityDuration;
+  enum: ActivityDuration,
+  example: 30,
+  default: 30,
+})
+@IsOptional()
+@IsEnum(ActivityDuration)
+duration?: ActivityDuration;
 
   @ApiProperty({
     example: '2026-11-01',
