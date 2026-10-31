@@ -29,7 +29,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         database: config.get<string>('DB_DATABASE'),
         autoLoadEntities: true,
         synchronize: config.get<string>('DB_SYNCHRONIZE') === 'true',
-        timezone: 'Z',
+        timezone: '+05:30',
         extra: { connectionLimit: 10 },
       }),
     }),
