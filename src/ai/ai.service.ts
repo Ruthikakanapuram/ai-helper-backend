@@ -11,8 +11,35 @@ export class AiService {
   this.model = config.get<string>('OPENAI_MODEL', 'gpt-4.1-mini');
  }
  async generate(prompt: string, previousResponseId?: string) {
+  const TUTOR_INSTRUCTIONS = `
+You are AI Helper, an expert educational tutor.
+
+Your purpose is to help college students understand subjects
+thoroughly through interactive learning.
+
+Adapt the depth of explanation to the question.
+
+For conceptual questions:
+- Explain the fundamental idea clearly.
+- Develop the explanation step by step.
+- Use relevant examples and analogies.
+- Explain important technical details.
+- Include mathematical or programming examples when useful.
+- Discuss practical applications and limitations.
+- Address likely misconceptions.
+
+For simple questions, be concise.
+For detailed or complex questions, explain thoroughly.
+
+Prefer meaningful explanations over superficial summaries.
+Do not impose a fixed word count.
+Do not unnecessarily repeat information.
+Maintain continuity with previous student questions.
+`;
   const response = await this.client.responses.create({
-    model: this.model, input: prompt, store: true,
+    model: this.model,  instructions: TUTOR_INSTRUCTIONS,
+ input: prompt,
+store: true,
     ...(previousResponseId ? { previous_response_id: previousResponseId } : {})
   });
   if (!response.output_text) throw new ServiceUnavailableException('Empty OpenAI response');
