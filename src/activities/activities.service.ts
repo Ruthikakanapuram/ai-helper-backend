@@ -425,63 +425,96 @@ async findAll(user: Principal) {
 
 
 
-  async closeExpiredActivities(): Promise<void> {
-    // Get all currently published activities that have
-    // reached their scheduled expiration time.
-    const expiredActivities = await this.repo
-      .createQueryBuilder('activity')
-      .where('activity.status = :status', {
-        status: ActivityStatus.PUBLISHED,
-      })
-      .andWhere('activity.started_at IS NOT NULL')
-      .andWhere(
-        'TIMESTAMPADD(MINUTE, activity.duration, activity.started_at) <= UTC_TIMESTAMP(6)',
-      )
-      .getMany();
 
-    for (const activity of expiredActivities) {
-      // Transactionally close the activity
-      // and expire its active student sessions.
-      await this.dataSource.transaction(async (manager) => {
-        const result = await manager
-          .createQueryBuilder()
-          .update(Activity)
-          .set({
-            status: ActivityStatus.CLOSED,
-            endedAt: new Date(),
-          })
-          .where('id = :id', { id: activity.id })
-          .andWhere('status = :status', {
-            status: ActivityStatus.PUBLISHED,
-          })
-          .andWhere(
-            'TIMESTAMPADD(MINUTE, duration, started_at) <= UTC_TIMESTAMP(6)',
-          )
-          .execute();
+async closeExpiredActivities(): Promise<void> {
+  // MySQL DATETIME columns are stored using IST
+  // by application convention.
+  const currentIST =
+    'DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 330 MINUTE)';
 
-        // Only expire sessions if the activity
-        // was successfully transitioned.
-        if (result.affected !== 1) {
-          return;
-        }
+  // Step 1: Find published activities whose
+  // configured duration has expired.
+  const expiredActivities = await this.repo
+    .createQueryBuilder('activity')
+    .where('activity.status = :status', {
+      status: ActivityStatus.PUBLISHED,
+    })
+    .andWhere('activity.started_at IS NOT NULL')
+    .andWhere(
+      `TIMESTAMPADD(
+        MINUTE,
+        activity.duration,
+        activity.started_at
+      ) <= ${currentIST}`,
+    )
+    .getMany();
 
-        await manager
-          .createQueryBuilder()
-          .update(ChatSession)
-          .set({
-            status: ChatSessionStatus.EXPIRED,
-            endedAt: new Date(),
-          })
-          .where('activity_id = :activityId', {
-            activityId: activity.id,
-          })
-          .andWhere('status = :status', {
-            status: ChatSessionStatus.ACTIVE,
-          })
-          .execute();
-      });
-    }
+  // Step 2: Process each expired activity.
+  for (const activity of expiredActivities) {
+    await this.dataSource.transaction(async (manager) => {
+      // Lock the activity to serialize expiry
+      // with other properly locked status changes.
+      const current = await manager
+        .getRepository(Activity)
+        .createQueryBuilder('activity')
+        .where('activity.id = :id', { id: activity.id })
+        .setLock('pessimistic_write')
+        .getOne();
+
+      if (
+        !current ||
+        current.status !== ActivityStatus.PUBLISHED ||
+        !current.startedAt
+      ) {
+        return;
+      }
+
+      // Recheck the deadline within the transaction
+      // using the same IST convention.
+      const result = await manager
+        .createQueryBuilder()
+        .update(Activity)
+        .set({
+          status: ActivityStatus.CLOSED,
+          endedAt: new Date(),
+        })
+        .where('id = :id', { id: current.id })
+        .andWhere('status = :status', {
+          status: ActivityStatus.PUBLISHED,
+        })
+        .andWhere(
+          `TIMESTAMPADD(
+            MINUTE,
+            duration,
+            started_at
+          ) <= ${currentIST}`,
+        )
+        .execute();
+
+      if (result.affected !== 1) {
+        return;
+      }
+
+      // Step 3: Expire ACTIVE chat sessions
+      // associated with this activity.
+      await manager
+        .createQueryBuilder()
+        .update(ChatSession)
+        .set({
+          status: ChatSessionStatus.EXPIRED,
+          endedAt: new Date(),
+        })
+        .where('activity_id = :activityId', {
+          activityId: current.id,
+        })
+        .andWhere('status = :status', {
+          status: ChatSessionStatus.ACTIVE,
+        })
+        .execute();
+    });
   }
+}
+
 
 // getActivityMonitor returns a list of all students assigned to an activity, along with their chat session status and last message timestamp.
 async getActivityMonitor(
